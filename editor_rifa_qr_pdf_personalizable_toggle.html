@@ -1,0 +1,179 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Boletos QR - Activar y Desactivar Espera</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f0f0f0; text-align: center; padding: 20px; }
+    input, textarea { width: 80%; padding: 10px; margin: 8px 0; font-size: 16px; }
+    button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+    .boletos { display: flex; flex-wrap: wrap; justify-content: center; }
+    .boleto {
+      width: 270px;
+      height: 400px;
+      border: 2px solid #000;
+      margin: 10px;
+      padding: 10px;
+      box-sizing: border-box;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: start;
+      align-items: center;
+      text-align: center;
+    }
+    .boleto-logo {
+      max-width: 100px;
+      max-height: 60px;
+      margin: 5px auto;
+      display: block;
+    }
+    .boleto-header {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 5px;
+    }
+    .boleto h2, .boleto p {
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Editor de Boletos QR con Activación Dinámica</h1>
+
+  <input type="number" id="cantidad" value="5" placeholder="Cantidad de boletos" />
+  <textarea id="ganadores">002,003</textarea><br/>
+  <input type="text" id="msgWin" value="🎉 ¡Ganaste! Reclama tu premio con Henri 🎁" />
+  <input type="text" id="msgLose" value="😢 Gracias por participar, ¡suerte para la próxima!" />
+  <input type="text" id="msgEspera" value="🔒 En espera..." />
+
+  <input type="text" id="titulo" value="Gobierno de Cárdenas" placeholder="Título del boleto" />
+  <label>Color de letras:</label>
+  <input type="color" id="colorTexto" value="#000000" />
+  <label>Color de fondo:</label>
+  <input type="color" id="colorFondo" value="#ffffff" />
+  <label>Sube imagen de fondo:</label><br>
+  <input type="file" id="fondo" accept="image/*" />
+  <label>Sube tu logo:</label><br>
+  <input type="file" id="logo" accept="image/*" />
+
+  <br>
+  <button onclick="generar()">Generar boletos</button>
+  <button onclick="activar()">Activar Rifa</button>
+  <button onclick="desactivar()">Desactivar Rifa</button>
+  <button onclick="descargarPDF()">Descargar PDF</button>
+
+  <div class="boletos" id="contenedor"></div>
+
+  <script>
+    let logoBase64 = "";
+    let fondoBase64 = "";
+
+    document.getElementById("logo").addEventListener("change", function(evt) {
+      const file = evt.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = e => logoBase64 = e.target.result;
+        reader.readAsDataURL(file);
+      }
+    });
+
+    document.getElementById("fondo").addEventListener("change", function(evt) {
+      const file = evt.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = e => fondoBase64 = e.target.result;
+        reader.readAsDataURL(file);
+      }
+    });
+
+    function generar() {
+      const cantidad = parseInt(document.getElementById("cantidad").value);
+      const ganadores = document.getElementById("ganadores").value.split(',').map(x => x.trim().padStart(3, '0'));
+      const msgWin = document.getElementById("msgWin").value;
+      const msgLose = document.getElementById("msgLose").value;
+      const titulo = document.getElementById("titulo").value;
+      const colorTexto = document.getElementById("colorTexto").value;
+      const colorFondo = document.getElementById("colorFondo").value;
+      const msgEspera = document.getElementById("msgEspera").value;
+      const contenedor = document.getElementById("contenedor");
+      contenedor.innerHTML = "";
+
+      for (let i = 1; i <= cantidad; i++) {
+        const numero = String(i).padStart(3, '0');
+        const esGanador = ganadores.includes(numero);
+        const mensaje = esGanador ? msgWin : msgLose;
+
+        const div = document.createElement("div");
+        div.className = "boleto";
+        div.id = "boleto_" + numero;
+        div.dataset.ganador = mensaje;
+        div.dataset.espera = msgEspera;
+        div.dataset.estado = "espera";
+        div.style.color = colorTexto;
+
+        if (fondoBase64) {
+          div.style.backgroundImage = `url('${fondoBase64}')`;
+        } else {
+          div.style.backgroundColor = colorFondo;
+        }
+
+        let logoHTML = logoBase64 ? `<img class="boleto-logo" src="${logoBase64}" />` : "";
+
+        div.innerHTML = `
+          ${logoHTML}
+          <div class="boleto-header">${titulo}</div>
+          <h2>Boleto ${numero}</h2>
+          <canvas id="qr${numero}"></canvas>
+          <p>${msgEspera}</p>
+        `;
+
+        contenedor.appendChild(div);
+
+        new QRious({
+          element: document.getElementById("qr" + numero),
+          value: window.location.href.split('?')[0] + "?boleto=" + numero,
+          size: 150
+        });
+      }
+    }
+
+    function activar() {
+      document.querySelectorAll(".boleto").forEach(div => {
+        div.dataset.estado = "activo";
+        div.querySelector("p").textContent = div.dataset.ganador;
+      });
+    }
+
+    function desactivar() {
+      document.querySelectorAll(".boleto").forEach(div => {
+        div.dataset.estado = "espera";
+        div.querySelector("p").textContent = div.dataset.espera;
+      });
+    }
+
+    async function descargarPDF() {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
+      const boletos = document.querySelectorAll('.boleto');
+
+      for (let i = 0; i < boletos.length; i++) {
+        const canvas = await html2canvas(boletos[i]);
+        const imgData = canvas.toDataURL("image/png");
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 10, 10, 190, 260);
+      }
+
+      pdf.save("Boletos_QR_Toggle.pdf");
+    }
+  </script>
+</body>
+</html>
